@@ -1,0 +1,5 @@
+assemblyai
+python-dotenv
+moviepy
+streamlit
+anthropic
