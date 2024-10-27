@@ -39,6 +39,61 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(CHAPTERS_DIR, exist_ok=True)
 os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
 
+# def create_export_package(video_name, transcript_data):
+#     """Create a ZIP file containing all generated content"""
+#     # Create a timestamp for the export
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     zip_filename = f"{video_name}_export_{timestamp}.zip"
+#     zip_path = os.path.join(TRANSCRIPTS_DIR, zip_filename)
+    
+#     # Create a ZIP file
+#     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+#         # Add transcript data
+#         if transcript_data:
+#             transcript_json = os.path.join(TRANSCRIPTS_DIR, f"{video_name}_transcript.json")
+#             if os.path.exists(transcript_json):
+#                 zipf.write(transcript_json, os.path.basename(transcript_json))
+        
+#         # Add chapter clips
+#         chapters_dir = os.path.join(CHAPTERS_DIR)
+#         for chapter_file in os.listdir(chapters_dir):
+#             if chapter_file.startswith(f"chapter_") and chapter_file.endswith(f"{video_name}"):
+#                 chapter_path = os.path.join(chapters_dir, chapter_file)
+#                 zipf.write(chapter_path, os.path.join("chapter_clips", chapter_file))
+        
+#         # Add generated content files
+#         content_files = {
+#             "summary": f"{video_name}_summary.txt",
+#             "target_audience": f"{video_name}_target_audience.txt",
+#             "discussion_guide": f"{video_name}_discussion_guide.txt",
+#             "social_posts": f"{video_name}_social_posts.txt"
+#         }
+        
+#         for content_type, filename in content_files.items():
+#             file_path = os.path.join(TRANSCRIPTS_DIR, filename)
+#             if os.path.exists(file_path):
+#                 zipf.write(file_path, os.path.join("generated_content", filename))
+        
+#         # Add a README with content overview
+#         readme_content = f"""Documentary Film Content Package
+# 			Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+# 			Video: {video_name}
+
+# 			Contents:
+# 			1. Transcript and Chapters (JSON)
+# 			2. Chapter Video Clips
+# 			3. Generated Content:
+# 			- Summary
+# 			- Target Audience Analysis
+# 			- Discussion Guide
+# 			- Social Media Posts
+
+# 			Note: This package contains all available generated content at the time of export.
+# 		"""
+#         zipf.writestr("README.txt", readme_content)
+    
+#     return zip_path
+
 def create_export_package(video_name, transcript_data):
     """Create a ZIP file containing all generated content"""
     # Create a timestamp for the export
@@ -54,19 +109,29 @@ def create_export_package(video_name, transcript_data):
             if os.path.exists(transcript_json):
                 zipf.write(transcript_json, os.path.basename(transcript_json))
         
-        # Add chapter clips
-        chapters_dir = os.path.join(CHAPTERS_DIR)
-        for chapter_file in os.listdir(chapters_dir):
-            if chapter_file.startswith(f"chapter_") and chapter_file.endswith(f"{video_name}"):
-                chapter_path = os.path.join(chapters_dir, chapter_file)
-                zipf.write(chapter_path, os.path.join("chapter_clips", chapter_file))
+        # Add chapter clips - Modified this section
+        clips_added = False
+        for idx, chapter in enumerate(transcript_data['chapters'], 1):
+            clip_filename = f"chapter_{idx}_{video_name}.mp4"
+            clip_path = os.path.join(CHAPTERS_DIR, clip_filename)
+            if os.path.exists(clip_path):
+                clips_added = True
+                zipf.write(
+                    clip_path, 
+                    os.path.join("chapter_clips", clip_filename)
+                )
+                print(f"Added clip: {clip_filename}")  # Debug print
+        
+        if not clips_added:
+            print("No chapter clips found to add to package")  # Debug print
         
         # Add generated content files
         content_files = {
             "summary": f"{video_name}_summary.txt",
             "target_audience": f"{video_name}_target_audience.txt",
             "discussion_guide": f"{video_name}_discussion_guide.txt",
-            "social_posts": f"{video_name}_social_posts.txt"
+            "social_posts": f"{video_name}_social_posts.txt",
+            "impact_orgs": f"{video_name}_impact_orgs.txt"
         }
         
         for content_type, filename in content_files.items():
@@ -74,23 +139,34 @@ def create_export_package(video_name, transcript_data):
             if os.path.exists(file_path):
                 zipf.write(file_path, os.path.join("generated_content", filename))
         
-        # Add a README with content overview
-        readme_content = f"""Documentary Film Content Package
-			Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-			Video: {video_name}
-
-			Contents:
-			1. Transcript and Chapters (JSON)
-			2. Chapter Video Clips
-			3. Generated Content:
-			- Summary
-			- Target Audience Analysis
-			- Discussion Guide
-			- Social Media Posts
-
-			Note: This package contains all available generated content at the time of export.
-		"""
-        zipf.writestr("README.txt", readme_content)
+        # Add a README with content overview and included files list
+        readme_content = [
+            f"Documentary Film Content Package",
+            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Video: {video_name}\n",
+            "Package Contents:",
+            "----------------"
+        ]
+        
+        # List actual included content
+        if os.path.exists(transcript_json):
+            readme_content.append("1. Transcript Data:")
+            readme_content.append(f"   - {os.path.basename(transcript_json)}")
+        
+        if clips_added:
+            readme_content.append("\n2. Chapter Clips:")
+            for idx, chapter in enumerate(transcript_data['chapters'], 1):
+                clip_filename = f"chapter_{idx}_{video_name}.mp4"
+                if os.path.exists(os.path.join(CHAPTERS_DIR, clip_filename)):
+                    readme_content.append(f"   - {clip_filename}")
+                    readme_content.append(f"     Gist: {chapter['gist']}")
+        
+        readme_content.append("\n3. Generated Content:")
+        for content_type, filename in content_files.items():
+            if os.path.exists(os.path.join(TRANSCRIPTS_DIR, filename)):
+                readme_content.append(f"   - {filename}")
+        
+        zipf.writestr("README.txt", "\n".join(readme_content))
     
     return zip_path
 
@@ -149,6 +225,25 @@ def generate_social_posts(transcript_text):
     Transcript:
     {transcript_text}
     """
+    return get_completion(client, prompt)
+
+
+# Add this new function with your other generation functions:
+def generate_impact_orgs(transcript_text, target_audience_text):
+    prompt = f"""Based on this documentary transcript and its target audience analysis, suggest relevant organizations or communities that would be ideal for sharing the film. Consider factors like their interests, mission, and potential engagement with the film's themes.
+		Transcript:
+		{transcript_text}
+
+		Target Audience Analysis:
+		{target_audience_text}
+
+		Please give specific examples formatted like this for each organization:
+		### Target Audience Type:
+		* Name of Organization:
+		* Organization's Email:
+		* Organization's Website:
+		* Organization's Core Values:
+		"""
     return get_completion(client, prompt)
 
 # def extract_tagged_content(text, tag):
@@ -414,6 +509,43 @@ def main():
                     #     st.session_state.target_audience = None
                     #     st.rerun()
 
+            st.divider()
+            
+            st.subheader("Impact Organizations")
+            if 'impact_orgs' not in st.session_state:
+                st.session_state.impact_orgs = None
+            
+            # Only show Impact Orgs button if target audience exists
+            if st.session_state.target_audience:
+                if st.button("Generate Impact Organizations") or st.session_state.impact_orgs:
+                    if not st.session_state.impact_orgs:
+                        with st.spinner("Identifying relevant organizations..."):
+                            try:
+                                impact_orgs = generate_impact_orgs(
+                                    st.session_state.transcript_data['text'],
+                                    st.session_state.target_audience
+                                )
+                                if impact_orgs:
+                                    st.session_state.impact_orgs = impact_orgs
+                                    
+                                    # Save to file
+                                    impact_orgs_path = os.path.join(
+                                        TRANSCRIPTS_DIR, 
+                                        f"{os.path.splitext(uploaded_file.name)[0]}_impact_orgs.txt"
+                                    )
+                                    with open(impact_orgs_path, 'w') as f:
+                                        f.write(impact_orgs)
+                                    
+                                    st.success("Impact organizations identified and saved!")
+                                    # st.experimental_rerun()
+                            except Exception as e:
+                                st.error(f"Error generating impact organizations: {str(e)}")
+                    
+                    if st.session_state.impact_orgs:
+                        st.markdown(st.session_state.impact_orgs)
+            else:
+                st.info("Please generate Target Audience Analysis first to identify relevant organizations.")
+            
             st.divider()
             
             # Discussion Guide
