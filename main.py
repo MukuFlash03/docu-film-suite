@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 import json
 from anthropic import Anthropic
 import re
+import zipfile
+import io
+import base64
+from datetime import datetime
 
 client = Anthropic(
     api_key=os.getenv("ANTHROPIC_API_KEY"),
@@ -34,6 +38,68 @@ TRANSCRIPTS_DIR = os.path.join(CURRENT_DIR, "transcripts")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(CHAPTERS_DIR, exist_ok=True)
 os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
+
+def create_export_package(video_name, transcript_data):
+    """Create a ZIP file containing all generated content"""
+    # Create a timestamp for the export
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_filename = f"{video_name}_export_{timestamp}.zip"
+    zip_path = os.path.join(TRANSCRIPTS_DIR, zip_filename)
+    
+    # Create a ZIP file
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Add transcript data
+        if transcript_data:
+            transcript_json = os.path.join(TRANSCRIPTS_DIR, f"{video_name}_transcript.json")
+            if os.path.exists(transcript_json):
+                zipf.write(transcript_json, os.path.basename(transcript_json))
+        
+        # Add chapter clips
+        chapters_dir = os.path.join(CHAPTERS_DIR)
+        for chapter_file in os.listdir(chapters_dir):
+            if chapter_file.startswith(f"chapter_") and chapter_file.endswith(f"{video_name}"):
+                chapter_path = os.path.join(chapters_dir, chapter_file)
+                zipf.write(chapter_path, os.path.join("chapter_clips", chapter_file))
+        
+        # Add generated content files
+        content_files = {
+            "summary": f"{video_name}_summary.txt",
+            "target_audience": f"{video_name}_target_audience.txt",
+            "discussion_guide": f"{video_name}_discussion_guide.txt",
+            "social_posts": f"{video_name}_social_posts.txt"
+        }
+        
+        for content_type, filename in content_files.items():
+            file_path = os.path.join(TRANSCRIPTS_DIR, filename)
+            if os.path.exists(file_path):
+                zipf.write(file_path, os.path.join("generated_content", filename))
+        
+        # Add a README with content overview
+        readme_content = f"""Documentary Film Content Package
+			Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+			Video: {video_name}
+
+			Contents:
+			1. Transcript and Chapters (JSON)
+			2. Chapter Video Clips
+			3. Generated Content:
+			- Summary
+			- Target Audience Analysis
+			- Discussion Guide
+			- Social Media Posts
+
+			Note: This package contains all available generated content at the time of export.
+		"""
+        zipf.writestr("README.txt", readme_content)
+    
+    return zip_path
+
+def get_binary_file_downloader_html(bin_file, file_label='File'):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    bin_str = base64.b64encode(data).decode()
+    href = f'<a href="data:application/zip;base64,{bin_str}" download="{os.path.basename(bin_file)}">Download {file_label}</a>'
+    return href
 
 def get_completion(client, prompt):
 	try:
@@ -410,6 +476,26 @@ def main():
                     #     st.session_state.social_posts = None
                     #     st.rerun()
             st.divider()
+            
+            # Export section at the bottom
+            st.header("Export Content Package")
+            if st.button("Create Content Package"):
+                try:
+                    with st.spinner("Creating content package..."):
+                        video_name = os.path.splitext(uploaded_file.name)[0]
+                        zip_path = create_export_package(video_name, st.session_state.transcript_data)
+                        
+                        # Create download link
+                        st.markdown(
+                            get_binary_file_downloader_html(
+                                zip_path, 
+                                f'{video_name} Content Package'
+                            ),
+                            unsafe_allow_html=True
+                        )
+                        st.success("Content package created successfully!")
+                except Exception as e:
+                    st.error(f"Error creating content package: {str(e)}")
 
 if __name__ == "__main__":
     main()
